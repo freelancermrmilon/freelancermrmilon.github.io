@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "io.github.freelancermrmilon.twa",
+        "sha256_cert_fingerprints": ["A7:77:AA:6B:16:DC:7F:B7:2B:93:3B:31:7B:2A:94:38:A3:38:3F:D1:D3:E4:AF:74:A9:11:BA:A6:62:D5:E8:F4"]
+      }
+    }]
