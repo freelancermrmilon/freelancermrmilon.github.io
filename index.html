@@ -308,7 +308,7 @@
         /* ===== Cashbox ===== */
         #bkAppScreen { padding-bottom: 76px; }
         .bk-toast { bottom: 72px; }
-        #bkAppScreen.tab-cash > :not(.top-live-date-bar):not(.app-header):not(.user-admin-bar):not(#bkCashPane):not(.bk-bottom-nav) { display: none !important; }
+        #bkAppScreen.tab-cash > :not(.top-live-date-bar):not(.app-header):not(.user-admin-bar):not(#bkCashPane):not(.bk-bottom-nav):not(.exp-bar) { display: none !important; }
         #bkCashPane { display: none; }
         .tab-cash > #bkCashPane { display: block; }
         .bk-bottom-nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 900; display: flex; justify-content: center; gap: 8px; background: #fff; border-top: 1px solid #e5e7eb; padding: 6px 10px calc(6px + env(safe-area-inset-bottom, 0px)); box-shadow: 0 -2px 8px rgba(0,0,0,.05); }
@@ -342,7 +342,7 @@
         .cb-rep-line { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px dashed #e5e7eb; font-size: 13px; }
 
         /* ===== Stock ===== */
-        #bkAppScreen.tab-stock > :not(.top-live-date-bar):not(.app-header):not(.user-admin-bar):not(#bkStockPane):not(.bk-bottom-nav) { display: none !important; }
+        #bkAppScreen.tab-stock > :not(.top-live-date-bar):not(.app-header):not(.user-admin-bar):not(#bkStockPane):not(.bk-bottom-nav):not(.exp-bar) { display: none !important; }
         #bkStockPane { display: none; }
         .tab-stock > #bkStockPane { display: block; }
         .st-head { display: flex; align-items: center; gap: 10px; background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; padding: 10px 12px; }
@@ -734,6 +734,8 @@
         .bk-sync.ok { display: block; background: #15803d; }
         body.bk-warn { padding-top: 32px; }
         body.bk-warn #bkCustPage { top: 32px; }
+        .exp-bar { display: none; margin: 0 0 8px; padding: 9px 12px; border-radius: 12px; background: linear-gradient(90deg,#b45309,#e08a00); color: #fff; font-size: 13px; font-weight: 700; text-align: center; cursor: pointer; box-shadow: 0 8px 16px -8px rgba(180,83,9,.7); }
+        html.bk-expired .exp-bar { display: block; }
     </style>
 </head>
 <body>
@@ -831,6 +833,8 @@
         <span class='badge' id='bkSubBadge' onclick='bkShowUpgradeModal()' style='cursor:pointer'>...</span>
       </div>
       </div>
+
+    <div id='bkExpBar' class='exp-bar' onclick='bkShowUpgradeModal()'>🔒 মেয়াদ শেষ — শুধু দেখা যাবে · সাবস্ক্রিপশন কিনুন ›</div>
 
     <!-- Summary Cards -->
     <div class='summary-grid' id='bkSummaryGrid'></div>
@@ -1136,6 +1140,10 @@
 </div>
 
 <div class='bk-sync' id='bkSyncBanner'></div>
+<div class='bk-modal-overlay' id='bkDlg' style='z-index:10100'><div class='bk-modal-box'>
+  <div id='bkDlgMsg' style='white-space:pre-wrap;font-size:15px;line-height:1.55;color:#111827;font-weight:600;padding:4px 2px 2px'></div>
+  <div class='bk-modal-row'><button class='btn-cancel' id='bkDlgNo'>বাতিল</button><button class='btn-approve' id='bkDlgYes'>ঠিক আছে</button></div>
+</div></div>
 <div class='bk-toast' id='bkToast'></div>
 
 <!-- Firebase SDK -->
@@ -1152,6 +1160,25 @@ var firebaseConfig = {
   messagingSenderId: "341579038456",
   appId: "1:341579038456:web:50f5720279a30a70ea850d"
 };
+
+var bkDlgQ = [], bkDlgBusy = false;
+function bkDlgNext() {
+  if (bkDlgBusy || !bkDlgQ.length) return;
+  var d = bkDlgQ.shift(); bkDlgBusy = true;
+  var o = document.getElementById('bkDlg'), yes = document.getElementById('bkDlgYes'), no = document.getElementById('bkDlgNo');
+  document.getElementById('bkDlgMsg').textContent = d.msg;
+  no.style.display = d.confirm ? '' : 'none';
+  yes.textContent = d.yesText || (d.confirm ? 'হ্যাঁ' : 'ঠিক আছে'); no.textContent = d.noText || 'বাতিল';
+  var done = function(v) { o.style.display = 'none'; bkDlgBusy = false; yes.onclick = no.onclick = null; if (d.cb) d.cb(v); setTimeout(bkDlgNext, 0); };
+  yes.onclick = function() { done(true); }; no.onclick = function() { done(false); };
+  o.style.display = 'flex';
+}
+window.alert = function(m) { bkDlgQ.push({ msg: String(m), confirm: false }); bkDlgNext(); };
+function bkConfirm(m) { return new Promise(function(res) { bkDlgQ.push({ msg: String(m), confirm: true, cb: res }); bkDlgNext(); }); }
+function bkExpiredDialog() {
+  bkDlgQ.push({ msg: 'আপনার মেয়াদ শেষ হয়ে গেছে।\nসাবস্ক্রিপশন কিনুন।', confirm: true, yesText: '💎 সাবস্ক্রিপশন কিনুন', noText: 'বন্ধ করুন', cb: function(v) { if (v) bkShowUpgradeModal(); } });
+  bkDlgNext();
+}
 
 firebase.initializeApp(firebaseConfig);
 var auth = firebase.auth();
@@ -1298,6 +1325,7 @@ async function bkHandleAuth() {
 }
 
 async function bkSignOut() {
+  document.documentElement.classList.remove('bk-expired');
   if (bkUnsubCustomers) { bkUnsubCustomers(); bkUnsubCustomers = null; }
   if (bkUnsubProfile) { bkUnsubProfile(); bkUnsubProfile = null; }
   bkAdmOpen = false;
@@ -1333,17 +1361,16 @@ auth.onAuthStateChanged(async function(user) {
     bkUnsubProfile = docRef.onSnapshot(function(s) {
       if (s.exists) {
         bkUserProfile = s.data();
-        bkUpdateUserBar();
-        if (bkCheckSubscriptionGate() && !bkUnsubCustomers) {
+        bkUpdateUserBar(); bkApplyExpiredUI();
+        if (!bkUnsubCustomers) {
           bkSubscribeToCustomers(bkCurrentUser.uid);
           bkShowScreen('app');
         }
       }
     });
-    if (bkCheckSubscriptionGate()) {
-      bkSubscribeToCustomers(user.uid);
-      bkShowScreen('app');
-    }
+    bkApplyExpiredUI();
+    bkSubscribeToCustomers(user.uid);
+    bkShowScreen('app');
   } catch (err) {
     console.error(err);
     bkShowScreen('auth');
@@ -1366,11 +1393,12 @@ function bkGetSubStatus() {
   return { status: 'expired', daysLeft: 0 };
 }
 
+function bkIsExpired() { return bkGetSubStatus().status === 'expired'; }
+function bkApplyExpiredUI() { document.documentElement.classList.toggle('bk-expired', !!bkCurrentUser && bkIsExpired()); }
+// লেখা/আপডেট করার আগে এটা ডাকা হয়: মেয়াদ শেষ হলে কাজ আটকে বার্তা দেখায়
 function bkCheckSubscriptionGate() {
-  var s = bkGetSubStatus();
-  if (s.status === 'trial' || s.status === 'active') return true;
-  bkSetPaywall(s);
-  bkShowScreen('paywall');
+  if (!bkIsExpired()) return true;
+  bkExpiredDialog();
   return false;
 }
 
@@ -1432,7 +1460,7 @@ async function bkAddCustomer() {
   var dueDate = document.getElementById('bkCustDue').value || '';
   if (!name || !phone) return alert('নাম ও মোবাইল নাম্বার দিন!');
   if (bkCustomers.some(function(c) { return c.phone === phone; })) {
-    if (!confirm('এই নাম্বারে (' + phone + ') আরেকজন কাস্টমার আছে। তবু যোগ করবেন?')) return;
+    if (!await bkConfirm('এই নাম্বারে (' + phone + ') আরেকজন কাস্টমার আছে। তবু যোগ করবেন?')) return;
   }
   var history = balance !== 0 ? [{
     type: balance > 0 ? 'শুরুর বাকি' : 'শুরুর জমা',
@@ -1474,21 +1502,23 @@ function bkUpdateBalance(id, type) {
 }
 
 async function bkDeleteCustomer(id) {
-  if (!confirm('নিশ্চিতভাবে এই কাস্টমার ও সব লেনদেন মুছে ফেলবেন?')) return;
+  if (!bkCheckSubscriptionGate()) return;
+  if (!await bkConfirm('নিশ্চিতভাবে এই কাস্টমার ও সব লেনদেন মুছে ফেলবেন?')) return;
   try {
     bkFire(db.collection('users').doc(bkCurrentUser.uid).collection('customers').doc(id).delete());
     bkToast('🗑️ ডিলিট হয়েছে');
   } catch (err) { alert(err.message); }
 }
 
-function bkUndoLast(id) {
+async function bkUndoLast(id) {
+  if (!bkCheckSubscriptionGate()) return;
   var c = bkCustomers.find(function(x) { return x.id === id; });
   if (!c) return;
   var h = (c.history || []).slice(), last = h[h.length - 1];
   if (!last || last.type.indexOf('শুরু') >= 0 || last.type.indexOf('✅') >= 0 || last.saleId) {
     return alert('বাতিল করার মতো লেনদেন নেই। (স্টক থেকে বিক্রি হলে স্টক ট্যাবের রিপোর্ট থেকে বাতিল করুন)');
   }
-  if (!confirm('শেষ লেনদেন (' + last.type + ' ' + last.amount + '৳) বাতিল করবেন?')) return;
+  if (!await bkConfirm('শেষ লেনদেন (' + last.type + ' ' + last.amount + '৳) বাতিল করবেন?')) return;
   var base = bkBase(), batch = db.batch(), delta = last.type.indexOf('বাকি') >= 0 ? -last.amount : last.amount;
   batch.update(base.collection('customers').doc(id), { balance: bkFV.increment(bkRound(delta)), history: h.slice(0, -1), lastUpdated: Date.now() });
   if (last.cashId) batch.delete(base.collection('cashbox').doc(last.cashId));
@@ -1496,6 +1526,7 @@ function bkUndoLast(id) {
 }
 
 function bkOpenEdit(id) {
+  if (!bkCheckSubscriptionGate()) return;
   var c = bkCustomers.find(function(x) { return x.id === id; });
   if (!c) return;
   bkEditingId = id;
@@ -1506,6 +1537,7 @@ function bkOpenEdit(id) {
 }
 function bkCloseEdit() { document.getElementById('bkEditModal').style.display = 'none'; bkEditingId = null; }
 async function bkSaveEdit() {
+  if (!bkCheckSubscriptionGate()) return;
   if (!bkEditingId) return;
   var name = document.getElementById('bkEditName').value.trim();
   var phone = document.getElementById('bkEditPhone').value.trim();
@@ -1535,12 +1567,12 @@ function bkOpenPaymentModal() {
 function bkClosePaymentModal() { document.getElementById('bkPaymentModal').style.display = 'none'; }
 function bkSetPaywall(s) {
   var ok = s.status === 'trial' || s.status === 'active';
-  document.getElementById('bkPaywallBack').style.display = ok ? 'inline-block' : 'none';
+  document.getElementById('bkPaywallBack').style.display = 'inline-block';
   document.getElementById('bkPwTitle').textContent = ok ? '💎 প্ল্যান বেছে নিন' : 'মেয়াদ শেষ';
-  document.getElementById('bkPwText').textContent = ok ? 'একটি প্ল্যান বেছে নিয়ে পেমেন্ট করুন, আপনার মেয়াদ বাড়ানো হবে।' : 'আপনার মেয়াদ শেষ হয়েছে। চালিয়ে যেতে একটি প্ল্যান বেছে নিন।';
+  document.getElementById('bkPwText').textContent = ok ? 'একটি প্ল্যান বেছে নিয়ে পেমেন্ট করুন, আপনার মেয়াদ বাড়ানো হবে।' : 'আপনার মেয়াদ শেষ হয়েছে। আবার লেনদেন যোগ করতে একটি প্ল্যান বেছে নিন। পুরনো হিসাব দেখতে "অ্যাপে ফিরে যান" চাপুন।';
 }
 function bkShowUpgradeModal() { bkSetPaywall(bkGetSubStatus()); bkShowScreen('paywall'); }
-setInterval(function() { if (bkCurrentUser && bkUserProfile) bkCheckSubscriptionGate(); }, 60000);
+setInterval(function() { if (bkCurrentUser && bkUserProfile) { bkUpdateUserBar(); bkApplyExpiredUI(); } }, 60000);
 
 async function bkSubmitPayment() {
   var txId = document.getElementById('bkTxId').value.trim();
@@ -1579,6 +1611,7 @@ function bkShowScreen(name) {
 function bkToggleAddForm() {
   var m = document.getElementById('bkAddModal');
   var opening = m.style.display !== 'flex';
+  if (opening && !bkCheckSubscriptionGate()) return;
   m.style.display = opening ? 'flex' : 'none';
   if (opening) setTimeout(function() { document.getElementById('bkCustName').focus(); }, 60);
 }
@@ -1875,7 +1908,7 @@ async function bkAdmExtend(uid, days) {
 }
 
 async function bkAdmRevoke(uid) {
-  if (!confirm('সাবস্ক্রিপশন বাতিল করবেন?')) return;
+  if (!await bkConfirm('সাবস্ক্রিপশন বাতিল করবেন?')) return;
   try {
     await db.collection('users').doc(uid).update({
       subscription: { status: 'expired', startedAt: '', expiresAt: '' }
@@ -1887,7 +1920,7 @@ async function bkAdmRevoke(uid) {
 async function bkAdmApprove(paymentId) {
   var p = bkAdmPayments.find(function(x) { return x.id === paymentId; });
   if (!p) return;
-  if (!confirm('Approve? ' + p.userName + ' - ' + p.plan + ' (৳' + p.amount + ')')) return;
+  if (!await bkConfirm('Approve? ' + p.userName + ' - ' + p.plan + ' (৳' + p.amount + ')')) return;
   try {
     var plan = BK_ADM_PLANS[p.plan] || BK_ADM_PLANS.monthly;
     var uRef = db.collection('users').doc(p.userId);
@@ -1908,7 +1941,7 @@ async function bkAdmApprove(paymentId) {
 }
 
 async function bkAdmReject(paymentId) {
-  if (!confirm('Reject করবেন?')) return;
+  if (!await bkConfirm('Reject করবেন?')) return;
   try {
     await db.collection('payment_requests').doc(paymentId).update({
       status: 'rejected',
@@ -1988,6 +2021,7 @@ function bkRenderCash() {
 }
 
 function bkCashOpen(type) {
+  if (!bkCheckSubscriptionGate()) return;
   bkCashType = type;
   document.getElementById('cbModalTitle').textContent = BK_CASH_TYPES[type].label;
   document.getElementById('cbAmt').value = ''; document.getElementById('cbNote').value = '';
@@ -2011,7 +2045,8 @@ async function bkCashSave() {
 }
 
 async function bkCashDel(id) {
-  if (!confirm('এই লেনদেনটি মুছে ফেলবেন?')) return;
+  if (!bkCheckSubscriptionGate()) return;
+  if (!await bkConfirm('এই লেনদেনটি মুছে ফেলবেন?')) return;
   bkFire(bkCashCol().doc(id).delete()); bkToast('🗑️ মুছে ফেলা হয়েছে');
 }
 
@@ -2022,6 +2057,7 @@ function bkCashToggleEye() {
 try { if (localStorage.getItem('bkCbHide') === '1') document.getElementById('bkCashPane').classList.add('cb-hide'); } catch (e) {}
 
 function bkCashReconcile() {
+  if (!bkCheckSubscriptionGate()) return;
   document.getElementById('cbRecBook').textContent = bkMoney(bkCashBalance()) + '৳';
   document.getElementById('cbRecReal').value = ''; document.getElementById('cbRecDiff').textContent = '';
   document.getElementById('bkCashRecModal').style.display = 'flex';
@@ -2039,7 +2075,7 @@ async function bkCashRecSave() {
   if (v === '') return alert('বাস্তব ক্যাশের পরিমাণ দিন');
   var d = Math.round((parseFloat(v) - bkCashBalance()) * 100) / 100;
   if (d === 0) { bkCloseModal('bkCashRecModal'); return bkToast('✅ হিসাব মিলে গেছে'); }
-  if (!confirm('ব্যবধান ' + bkMoney(Math.abs(d)) + '৳ সমন্বয় হিসেবে যোগ করবেন?')) return;
+  if (!await bkConfirm('ব্যবধান ' + bkMoney(Math.abs(d)) + '৳ সমন্বয় হিসেবে যোগ করবেন?')) return;
   try { await bkCashAdd(d > 0 ? 'adjIn' : 'adjOut', Math.abs(d), 'ক্যাশবক্স মিলাই'); bkCloseModal('bkCashRecModal'); bkToast('✅ ক্যাশ মিলানো হয়েছে'); }
   catch (err) { alert(err.message); }
 }
@@ -2097,6 +2133,7 @@ function bkRenderStock() {
 }
 
 function bkStockForm(id) {
+  if (!bkCheckSubscriptionGate()) return;
   var p = id ? bkProd(id) : null; bkStockSel = id || null;
   document.getElementById('stFormTitle').textContent = p ? '✏️ প্রোডাক্ট এডিট' : 'নতুন প্রোডাক্ট';
   document.getElementById('stName').value = p ? p.name : ''; document.getElementById('stQty').value = p ? p.qty : '';
@@ -2119,11 +2156,12 @@ async function bkStockSave() {
 function bkStockManage(id) { bkStockSel = id; document.getElementById('stMgTitle').textContent = bkProd(id).name; document.getElementById('bkStManageModal').style.display = 'flex'; }
 function bkStockEdit() { bkStockForm(bkStockSel); }
 async function bkStockDelete() {
-  if (!confirm('এই প্রোডাক্ট মুছে ফেলবেন?')) return;
+  if (!await bkConfirm('এই প্রোডাক্ট মুছে ফেলবেন?')) return;
   bkFire(bkBase().collection('products').doc(bkStockSel).delete()); bkCloseModal('bkStManageModal'); bkToast('🗑️ ডিলিট হয়েছে');
 }
 
 function bkStockSellOpen(id) {
+  if (!bkCheckSubscriptionGate()) return;
   var p = bkProd(id); if (!p) return;
   if ((Number(p.qty) || 0) <= 0) return alert('এই প্রোডাক্টের স্টক শেষ!');
   bkStockSel = id; bkCloseModal('bkStManageModal');
@@ -2171,6 +2209,7 @@ function bkStockSell() {
 }
 
 function bkStockRestockOpen() {
+  if (!bkCheckSubscriptionGate()) return;
   var p = bkProd(bkStockSel); bkCloseModal('bkStManageModal');
   document.getElementById('stReTitle').textContent = '➕ স্টক যোগ: ' + p.name;
   document.getElementById('stReQty').value = ''; document.getElementById('stReCost').value = p.buyPrice || '';
@@ -2207,8 +2246,9 @@ function bkStockReportRender() {
       return '<div class="cb-item"><div class="t">' + bkEsc(x.name) + ' × ' + bkMoney(x.qty) + ' <span class="st-badge ' + (x.mode === 'credit' ? 'low' : 'out') + '" style="' + (x.mode === 'credit' ? '' : 'background:#dcfce7;color:#166534') + '">' + (x.mode === 'credit' ? 'বাকি: ' + bkEsc(x.custName) : 'নগদ') + '</span><small>' + bkEsc(x.date) + '</small></div><b>' + bkMoney(x.total) + '৳</b><button class="x" onclick="bkStockVoid(\'' + x.id + '\')">বাতিল</button></div>';
     }).join('');
 }
-function bkStockVoid(id) {
-  if (!confirm('এই বিক্রি বাতিল করবেন? স্টক ফিরবে এবং ক্যাশ/খাতা থেকেও কমে যাবে।')) return;
+async function bkStockVoid(id) {
+  if (!bkCheckSubscriptionGate()) return;
+  if (!await bkConfirm('এই বিক্রি বাতিল করবেন? স্টক ফিরবে এবং ক্যাশ/খাতা থেকেও কমে যাবে।')) return;
   var x = bkSales.find(function(v) { return v.id === id; }); if (!x) return;
   var base = bkBase(), batch = db.batch(), now = Date.now();
   if (bkProd(x.productId)) batch.update(base.collection('products').doc(x.productId), { qty: bkFV.increment(Number(x.qty) || 0), lastUpdated: now });
@@ -2314,6 +2354,7 @@ function bkCpRemind() {
 }
 
 function bkApplyOps(id, ops, note, iso) {
+  if (!bkCheckSubscriptionGate()) return;
   var c = bkCustomers.find(function(x) { return x.id === id; });
   if (!c) throw new Error('কাস্টমার পাওয়া যায়নি');
   var base = bkBase(), ref = base.collection('customers').doc(id), batch = db.batch(), now = Date.now();
